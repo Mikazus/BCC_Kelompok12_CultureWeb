@@ -1,6 +1,6 @@
 import { CalendarCheck2, Search, Ticket, UserPlus } from 'lucide-react'
 
-const cara = [
+const flowSteps = [
     {
         title: 'Daftar Akun',
         desc: 'Buat akun gratis dengan email atau Google.',
@@ -23,9 +23,9 @@ const cara = [
     }
 ]
 
-const CaraKerja = () => {
+const Flow = () => {
     return (
-        <section id="cara-kerja" className="relative mx-auto mt-12 w-[92%] max-w-338 pb-10 text-[#2d2214]">
+        <section id="cara-kerja" className="relative mx-auto mt-12 w-[92%] max-w-338 scroll-mt-28 pb-10 text-[#2d2214]">
             <div className="mb-8 max-w-2xl">
                 <p className="  px-2 py-1 text-xl font-semibold text-black">
                 Panduan
@@ -38,7 +38,7 @@ const CaraKerja = () => {
 
             <div className="relative overflow-hidden rounded-3xl border border-[#6f5737] bg-[#f7f2ea]">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
-                    {cara.map((item, index) => {
+                    {flowSteps.map((item, index) => {
                         const Icon = item.icon
 
                         return (
@@ -62,4 +62,4 @@ const CaraKerja = () => {
     )
 }
 
-export default CaraKerja
+export default Flow
