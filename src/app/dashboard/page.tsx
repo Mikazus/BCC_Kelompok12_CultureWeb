@@ -9,7 +9,7 @@ import Footer from './footer'
 
 const DashboardPage = () => {
   return (
-    <main className="bg-[#f6f1e9] pb-16 pt-16">
+    <main className="bg-[#f6f1e9] pb-0 pt-16">
       <Back />
       <NAV />
       <Fore />

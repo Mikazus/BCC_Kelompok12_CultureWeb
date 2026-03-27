@@ -8,6 +8,7 @@ export type CategoryFilter = "Semua" | EventCategory
 
 export type EventCard = {
   id: number | string
+  slug?: string
   title: string
   category: EventCategory
   location: string

@@ -8,7 +8,7 @@ import type {
   RegisterRequest,
   RegisterResponse,
   RegisterResult,
-} from "@/types/api/auth";
+} from "../types/api/auth";
 
 const LOGIN_ENDPOINT = "/auth/login";
 const ME_ENDPOINT = "/me";

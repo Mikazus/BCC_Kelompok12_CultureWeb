@@ -1,4 +1,5 @@
-import Image from "next/image"
+import Image, { type ImageLoaderProps } from "next/image"
+import Link from "next/link"
 import { CalendarDays, Heart, MapPin } from "lucide-react"
 
 import type { EventCard } from "./types"
@@ -8,6 +9,8 @@ type EventGridProps = {
 }
 
 const EventGrid = ({ events }: EventGridProps) => {
+  const passthroughLoader = ({ src }: ImageLoaderProps) => src
+
   const buildSummary = (event: EventCard) => {
     if (event.summary && event.summary.trim()) {
       return event.summary;
@@ -31,6 +34,12 @@ const EventGrid = ({ events }: EventGridProps) => {
         <p className="text-sm text-[#7a6543]">{events.length} event ditemukan</p>
       </div>
 
+      {events.length === 0 ? (
+        <div className="rounded-2xl border border-[#d8c6a8] bg-[#f3e5cd] p-6 text-center text-sm text-[#6b5638]">
+          Belum ada event yang tersedia untuk filter ini.
+        </div>
+      ) : null}
+
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {events.map((event) => (
           <article
@@ -38,7 +47,15 @@ const EventGrid = ({ events }: EventGridProps) => {
             className="overflow-hidden rounded-[20px] border border-[#d8c6a8] bg-[#f3e5cd] shadow-[0_9px_20px_rgba(52,34,12,0.14)]"
           >
             <div className="relative m-3 mb-0 h-40 overflow-hidden rounded-[14px] sm:h-44">
-              <Image src={event.image} alt={event.title} className="h-full w-full object-cover" />
+              <Image
+                loader={typeof event.image === "string" ? passthroughLoader : undefined}
+                unoptimized={typeof event.image === "string"}
+                src={event.image}
+                alt={event.title}
+                fill
+                sizes="(max-width: 640px) 92vw, (max-width: 1024px) 46vw, 30vw"
+                className="h-full w-full object-cover"
+              />
 
               <p className="absolute left-2.5 top-2.5 rounded-full bg-black/45 px-3 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
                 {event.category}
@@ -78,9 +95,12 @@ const EventGrid = ({ events }: EventGridProps) => {
                   <p className="text-[10px] font-medium text-[#806744]">{buildStockLabel(event)}</p>
                 </div>
 
-                <button className="h-10 w-full rounded-full bg-[#ab8750] text-[12px] font-semibold text-white transition-colors hover:bg-[#946f3e]">
+                <Link
+                  href={event.slug ? `/EventDetail?slug=${encodeURIComponent(event.slug)}` : "/EventDetail"}
+                  className="flex h-10 w-full items-center justify-center rounded-full bg-[#ab8750] text-[12px] font-semibold text-white transition-colors hover:bg-[#946f3e]"
+                >
                   Lihat Selengkapnya
-                </button>
+                </Link>
               </div>
             </div>
           </article>

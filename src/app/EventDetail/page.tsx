@@ -1,153 +1,145 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { getCategories, getEventsByQuery } from "@/Services/eventService"
+import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { getEventBySlug, getEventComments, getEvents, postEventComment } from "@/Services/eventService"
 import { getApiErrorMessage } from "@/lib/apiError"
-import CategoryControls from "./categoryControls"
-import { eventCards as fallbackEventCards } from "./data"
-import EventGrid from "./eventGrid"
+import { getAuthTokenCookie } from "@/lib/authCookie"
+import Footer from "../dashboard/footer"
+import CommentSection from "./comment"
+import { eventComments, eventDetailData, type EventComment, type EventDetailData } from "./data"
+import DetailCard from "./details"
 import Hero from "./hero"
-import type { CategoryFilter, EventCard, SortOrder } from "./types"
-import type { EventCategoryOption } from "@/Services/eventService"
 
 const EventDetailPage = () => {
-	const [events, setEvents] = useState<EventCard[]>([])
-	const [isLoading, setIsLoading] = useState(true)
+	const searchParams = useSearchParams()
+	const slug = searchParams.get("slug")?.trim() || ""
+	const [detail, setDetail] = useState<EventDetailData>(eventDetailData)
 	const [errorMessage, setErrorMessage] = useState<string | null>(null)
-	const [apiCategories, setApiCategories] = useState<EventCategoryOption[]>([])
-	const [activeCategory, setActiveCategory] = useState<CategoryFilter>("Semua")
-	const [sortOrder, setSortOrder] = useState<SortOrder>("category-asc")
+	const [comments, setComments] = useState<EventComment[]>(eventComments)
+	const [isCommentLoading, setIsCommentLoading] = useState(false)
+	const [isCommentPosting, setIsCommentPosting] = useState(false)
+	const [commentError, setCommentError] = useState<string | null>(null)
 
 	useEffect(() => {
 		let isMounted = true
 
-		const loadCategories = async () => {
+		const loadEventDetail = async () => {
 			try {
-				const categories = await getCategories()
-				if (isMounted) {
-					setApiCategories(categories)
+				const selectedEvent = slug ? await getEventBySlug(slug) : null
+				const firstEvent = selectedEvent || (await getEvents())[0]
+
+				if (!isMounted || !firstEvent) {
+					return
 				}
-			} catch {
+
+				setDetail({
+					eventId: firstEvent.id,
+					title: firstEvent.title,
+					subtitle: firstEvent.summary || eventDetailData.subtitle,
+					category: firstEvent.category,
+					dateLabel: firstEvent.dateLabel,
+					location: firstEvent.location,
+					priceLabel: firstEvent.priceLabel,
+					ticketLabel: firstEvent.stockLabel || eventDetailData.ticketLabel,
+					description: firstEvent.summary || eventDetailData.description,
+					image: firstEvent.image,
+				})
+			} catch (error) {
 				if (isMounted) {
-					setApiCategories([])
+					setErrorMessage(getApiErrorMessage(error, "Gagal memuat detail event dari API."))
 				}
 			}
 		}
 
-		void loadCategories()
+		void loadEventDetail()
 
 		return () => {
 			isMounted = false
 		}
-	}, [])
-
-	const selectedCategoryId = useMemo(() => {
-		if (activeCategory === "Semua") {
-			return ""
-		}
-
-		const matched = apiCategories.find((item) => item.name === activeCategory)
-		return matched?.id || ""
-	}, [activeCategory, apiCategories])
+	}, [slug])
 
 	useEffect(() => {
 		let isMounted = true
+		const eventId = String(detail.eventId || "").trim()
 
-		const loadEvents = async () => {
-			setIsLoading(true)
-			setErrorMessage(null)
+		if (!eventId) {
+			return
+		}
+
+		const loadComments = async () => {
+			setIsCommentLoading(true)
+			setCommentError(null)
 
 			try {
-				const apiEvents = await getEventsByQuery({
-					limit: 5,
-					page: 1,
-					search: activeCategory === "Semua" ? "" : activeCategory,
-					categoryId: selectedCategoryId,
-					sortBy: "created_at",
-					sortOrder: sortOrder === "category-asc" ? "asc" : "desc",
-				})
-
-				if (!isMounted) {
-					return
-				}
-
-				if (apiEvents.length === 0) {
-					setEvents(fallbackEventCards)
-					setErrorMessage("Data event untuk kategori ini masih kosong. Menampilkan data cadangan.")
-				} else {
-					setEvents(apiEvents)
+				const commentItems = await getEventComments(eventId)
+				if (isMounted) {
+					setComments(commentItems)
 				}
 			} catch (error) {
-				if (!isMounted) {
-					return
+				if (isMounted) {
+					setCommentError(getApiErrorMessage(error, "Gagal memuat komentar event dari API."))
 				}
-
-				setEvents(fallbackEventCards)
-				setErrorMessage(getApiErrorMessage(error, "Gagal memuat data event dari API."))
 			} finally {
 				if (isMounted) {
-					setIsLoading(false)
+					setIsCommentLoading(false)
 				}
 			}
 		}
 
-		void loadEvents()
+		void loadComments()
 
 		return () => {
 			isMounted = false
 		}
-	}, [activeCategory, selectedCategoryId, sortOrder])
+	}, [detail.eventId])
 
-	const categories = useMemo<CategoryFilter[]>(() => {
-		const derivedCategories = [...new Set(events.map((item) => item.category))]
-		const effectiveCategories = apiCategories.length > 0 ? apiCategories.map((item) => item.name) : derivedCategories
-		return ["Semua", ...effectiveCategories]
-	}, [apiCategories, events])
-
-	useEffect(() => {
-		if (activeCategory !== "Semua" && !categories.includes(activeCategory)) {
-			setActiveCategory("Semua")
+	const handleCommentSubmit = async (comment: string, parentId?: string) => {
+		const eventId = String(detail.eventId || "").trim()
+		if (!eventId) {
+			setCommentError("Event ID tidak ditemukan.")
+			return false
 		}
-	}, [activeCategory, categories])
 
-	const filteredCards = useMemo(() => {
-		const baseCards =
-			activeCategory === "Semua"
-				? events
-				: events.filter((item) => item.category === activeCategory)
+		const token = getAuthTokenCookie()
+		if (!token) {
+			setCommentError("Silakan login terlebih dahulu untuk mengirim komentar.")
+			return false
+		}
 
-		const sorted = [...baseCards].sort((a, b) => {
-			const categoryCompare = a.category.localeCompare(b.category)
-			if (categoryCompare !== 0) {
-				return sortOrder === "category-asc" ? categoryCompare : -categoryCompare
-			}
-			return a.title.localeCompare(b.title)
-		})
+		setIsCommentPosting(true)
+		setCommentError(null)
 
-		return sorted
-	}, [activeCategory, events, sortOrder])
+		try {
+			await postEventComment(eventId, token, comment, parentId)
+			const updatedComments = await getEventComments(eventId)
+			setComments(updatedComments)
+			return true
+		} catch (error) {
+			setCommentError(getApiErrorMessage(error, "Gagal mengirim komentar."))
+			return false
+		} finally {
+			setIsCommentPosting(false)
+		}
+	}
 
 	return (
-		<main className="bg-[#f6f1e9] pb-16 pt-16 text-[#2f2416]">
-			<Hero />
-			{isLoading ? (
-				<section className="mx-auto mt-10 w-[92%] max-w-338 rounded-2xl border border-[#d8c9ad] bg-[#fbf7ef] p-5 text-sm text-[#6f5938]">
-					Memuat data event...
-				</section>
-			) : null}
+		<main className="bg-[#f6f1e9] pb-0 pt-16 text-[#2f2416]">
+			<Hero detail={detail} />
 			{errorMessage ? (
 				<section className="mx-auto mt-4 w-[92%] max-w-338 rounded-2xl border border-[#d6b07a] bg-[#fff4e2] p-4 text-sm text-[#7a4c1c]">
 					{errorMessage}
 				</section>
 			) : null}
-			<CategoryControls
-				categories={categories}
-				activeCategory={activeCategory}
-				sortOrder={sortOrder}
-				onCategoryChange={setActiveCategory}
-				onSortOrderChange={setSortOrder}
+			<DetailCard detail={detail} />
+			<CommentSection
+				comments={comments}
+				isLoading={isCommentLoading}
+				errorMessage={commentError}
+				isPosting={isCommentPosting}
+				onSubmitComment={handleCommentSubmit}
 			/>
-			<EventGrid events={filteredCards} />
+			<Footer />
 		</main>
 	)
 }

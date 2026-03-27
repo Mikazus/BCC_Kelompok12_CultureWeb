@@ -25,7 +25,7 @@ const flowSteps = [
 
 const Flow = () => {
     return (
-        <section id="cara-kerja" className="relative mx-auto mt-12 w-[92%] max-w-338 pb-10 text-[#2d2214]">
+        <section id="cara-kerja" className="relative mx-auto mt-12 w-[92%] max-w-338 scroll-mt-28 pb-10 text-[#2d2214]">
             <div className="mb-8 max-w-2xl">
                 <p className="  px-2 py-1 text-xl font-semibold text-black">
                 Panduan
