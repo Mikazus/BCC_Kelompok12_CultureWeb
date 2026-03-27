@@ -56,7 +56,7 @@ const Nav = () => {
 
           {/* Login */}
           <Link
-            href="/sign-up"
+            href="/sign-in"
             className="rounded-full bg-[#C9A25A] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#b9934f]"
           >
             Login
