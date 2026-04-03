@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { getEventBySlug, getEventComments, getEvents, postEventComment } from "@/Services/eventService"
 import { getApiErrorMessage } from "@/lib/apiError"
@@ -11,7 +11,7 @@ import { eventComments, eventDetailData, type EventComment, type EventDetailData
 import DetailCard from "./details"
 import Hero from "./hero"
 
-const EventDetailPage = () => {
+const EventDetailContent = () => {
 	const searchParams = useSearchParams()
 	const slug = searchParams.get("slug")?.trim() || ""
 	const [detail, setDetail] = useState<EventDetailData>(eventDetailData)
@@ -141,6 +141,14 @@ const EventDetailPage = () => {
 			/>
 			<Footer />
 		</main>
+	)
+}
+
+const EventDetailPage = () => {
+	return (
+		<Suspense fallback={<main className="bg-[#f6f1e9] pb-0 pt-16 text-[#2f2416]" />}>
+			<EventDetailContent />
+		</Suspense>
 	)
 }
 

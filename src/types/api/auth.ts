@@ -1,10 +1,12 @@
+export type UserRole = "user" | "promotor";
+
 export type RegisterRequest = {
   name: string;
   email: string;
   password: string;
-  confirmPassword: string;
+  confirmPassword?: string;
   phone: string;
-  role?: "user" | "admin";
+  role?: UserRole;
   gender: "male" | "female";
 };
 
@@ -51,5 +53,6 @@ export type MeResponse = {
 export type MeResult = {
   name: string;
   email: string;
+  role: UserRole | null;
   raw: MeResponse;
 };

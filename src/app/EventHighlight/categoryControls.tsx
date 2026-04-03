@@ -1,18 +1,18 @@
-import type { CategoryFilter, SortOrder } from "./types"
+import type { SortOrder } from "./types"
 import type { EventCategoryOption } from "@/Services/eventService"
 import Image, { type ImageLoaderProps } from "next/image"
 
 type CategoryControlsProps = {
   categoryOptions: EventCategoryOption[]
-  activeCategory: CategoryFilter
+  activeCategoryId: string
   sortOrder: SortOrder
-  onCategoryChange: (category: CategoryFilter) => void
+  onCategoryChange: (categoryId: string) => void
   onSortOrderChange: (sortOrder: SortOrder) => void
 }
 
 const CategoryControls = ({
   categoryOptions,
-  activeCategory,
+  activeCategoryId,
   sortOrder,
   onCategoryChange,
   onSortOrderChange,
@@ -20,7 +20,11 @@ const CategoryControls = ({
   const passthroughLoader = ({ src }: ImageLoaderProps) => src
 
   const formatEventCount = (value: number | undefined) => {
-    const safeCount = typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return null
+    }
+
+    const safeCount = Math.max(0, value)
     return `${safeCount} Event`
   }
 
@@ -34,13 +38,14 @@ const CategoryControls = ({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {categoryOptions.map((category) => {
-            const isActive = activeCategory === category.name
+            const isActive = activeCategoryId === category.id
+            const eventCountLabel = formatEventCount(category.event_count)
 
             return (
               <button
                 key={category.id}
                 type="button"
-                onClick={() => onCategoryChange(category.name)}
+                onClick={() => onCategoryChange(category.id)}
                 className={`flex min-h-40 flex-col items-center justify-center rounded-2xl border px-6 text-center text-[#3d2f1c] transition-colors ${
                   isActive
                     ? "border-[#6f5737] bg-[#eadfcd]"
@@ -61,7 +66,7 @@ const CategoryControls = ({
                   <div className="mb-4 h-9 w-9 rounded-full border border-[#6f5737]/40" aria-hidden="true" />
                 )}
                 <p className="text-xl font-semibold">{category.name}</p>
-                <p className="mt-2 text-lg">{formatEventCount(category.event_count)}</p>
+                {eventCountLabel ? <p className="mt-2 text-lg">{eventCountLabel}</p> : null}
               </button>
             )
           })}
@@ -75,14 +80,14 @@ const CategoryControls = ({
             onChange={(event) => onSortOrderChange(event.target.value as SortOrder)}
             className="rounded-full border border-[#8e7652] bg-[#f4ece3] px-3 py-1.5 text-sm text-[#3d2f1c] outline-none focus:ring-2 focus:ring-[#b79d71]/40"
           >
-            <option value="category-asc">Kategori A-Z</option>
-            <option value="category-desc">Kategori Z-A</option>
+            <option value="desc">Terbaru</option>
+            <option value="asc">Terlama</option>
           </select>
           <button
             type="button"
-            onClick={() => onCategoryChange("Semua")}
+            onClick={() => onCategoryChange("")}
             className={`rounded-full border px-3 py-1.5 ${
-              activeCategory === "Semua"
+              activeCategoryId === ""
                 ? "border-[#6b5330] bg-[#d8c2a0] text-[#251a0e]"
                 : "border-[#8e7652] bg-[#f4ece3] text-[#3d2f1c]"
             }`}

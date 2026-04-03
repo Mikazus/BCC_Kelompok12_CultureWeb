@@ -4,7 +4,7 @@ import { FormEvent, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { loginUser } from '@/Services/authService'
+import { getMe, loginUser } from '@/Services/authService'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { setAuthTokenCookie } from '@/lib/authCookie'
 import dignImage from '@/image/sign.png'
@@ -39,9 +39,12 @@ export default function Login() {
 				password,
 			})
 
+			const me = await getMe(result.token)
+			const redirectPath = me.role === 'promotor' ? '/promotor/dashboard' : '/dashboard'
+
 			setAuthTokenCookie(result.token, rememberMe)
 			window.dispatchEvent(new Event('auth-changed'))
-			router.push('/dashboard')
+			router.push(redirectPath)
 		} catch (error) {
 			setErrorMessage(getApiErrorMessage(error, 'Gagal login. Cek kembali email dan password.'))
 		} finally {

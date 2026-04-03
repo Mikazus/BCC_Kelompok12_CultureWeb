@@ -8,11 +8,29 @@ import type {
   RegisterRequest,
   RegisterResponse,
   RegisterResult,
+  UserRole,
 } from "../types/api/auth";
 
 const LOGIN_ENDPOINT = "/auth/login";
 const ME_ENDPOINT = "/me";
 const LOGOUT_ENDPOINT = "/auth/logout";
+
+const normalizeRole = (value: unknown): UserRole | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "promotor") {
+    return "promotor";
+  }
+
+  if (normalized === "user") {
+    return "user";
+  }
+
+  return null;
+};
 
 const extractToken = (response: LoginResponse) => {
   const fromTopLevel = response.token || response.access_token || response.accessToken || response.jwt;
@@ -44,7 +62,6 @@ export const registerUser = async (data: RegisterRequest) => {
     name: data.name,
     email: data.email,
     password: data.password,
-    password_confirmation: data.confirmPassword,
     phone: data.phone,
     role: data.role || "user",
     gender: data.gender,
@@ -100,9 +117,19 @@ const extractUserProfile = (response: MeResponse) => {
     ("email" in userObject && typeof userObject.email === "string" && userObject.email.trim()) ||
     "";
 
+  const role =
+    normalizeRole("role" in userObject ? userObject.role : null) ||
+    normalizeRole("user_role" in userObject ? userObject.user_role : null) ||
+    (typeof response.user === "object" &&
+    response.user !== null &&
+    "role" in response.user
+      ? normalizeRole(response.user.role)
+      : null);
+
   return {
     name,
     email,
+    role,
   };
 };
 
@@ -118,6 +145,7 @@ export const getMe = async (token: string) => {
   const result: MeResult = {
     name: profile.name,
     email: profile.email,
+    role: profile.role,
     raw: res.data,
   };
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { Suspense, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 
 import CheckOut from "./CheckOut"
@@ -44,7 +44,7 @@ const normalizeAmount = (value: string) => {
 	return Math.round(numeric)
 }
 
-const OrderPage = () => {
+const OrderPageContent = () => {
 	const searchParams = useSearchParams()
 
 	const paymentData = useMemo<PaymentSuccessData | null>(() => {
@@ -74,6 +74,14 @@ const OrderPage = () => {
 	}
 
 	return <CheckOut />
+}
+
+const OrderPage = () => {
+	return (
+		<Suspense fallback={<main className="bg-[#f6f1e9] pb-0 pt-20 text-[#2f2416]" />}>
+			<OrderPageContent />
+		</Suspense>
+	)
 }
 
 export default OrderPage

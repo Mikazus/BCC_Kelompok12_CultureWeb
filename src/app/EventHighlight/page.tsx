@@ -8,7 +8,7 @@ import Footer from "../dashboard/footer"
 import CategoryControls from "./categoryControls"
 import EventGrid from "./eventGrid"
 import Hero from "./hero"
-import type { CategoryFilter, EventCard, SortOrder } from "./types"
+import type { EventCard, SortOrder } from "./types"
 import type { EventCategoryOption } from "@/Services/eventService"
 import type { ApidogModel } from "@/types/api/event"
 
@@ -17,8 +17,8 @@ const EventDetailPage = () => {
 	const [isLoading, setIsLoading] = useState(true)
 	const [errorMessage, setErrorMessage] = useState<string | null>(null)
 	const [apiCategories, setApiCategories] = useState<EventCategoryOption[]>([])
-	const [activeCategory, setActiveCategory] = useState<CategoryFilter>("Semua")
-	const [sortOrder, setSortOrder] = useState<SortOrder>("category-asc")
+	const [activeCategoryId, setActiveCategoryId] = useState("")
+	const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
 
 	useEffect(() => {
 		let isMounted = true
@@ -52,12 +52,12 @@ const EventDetailPage = () => {
 
 			try {
 				const queryOptions: ApidogModel = {
-					category_id: "",
-					limit: "10",
+					category_id: activeCategoryId,
+					limit: "5",
 					page: "1",
 					search: "",
 					sort_by: "created_at",
-					sort_order: sortOrder === "category-asc" ? "asc" : "desc",
+					sort_order: sortOrder,
 				}
 
 				const apiEvents = await getEventsByQuery(queryOptions)
@@ -86,69 +86,11 @@ const EventDetailPage = () => {
 		return () => {
 			isMounted = false
 		}
-	}, [sortOrder])
-
-	const categories = useMemo<CategoryFilter[]>(() => {
-		const categorySet = new Set<string>()
-
-		for (const item of apiCategories) {
-			if (item.name.trim()) {
-				categorySet.add(item.name)
-			}
-		}
-
-		for (const item of events) {
-			if (item.category.trim()) {
-				categorySet.add(item.category)
-			}
-		}
-
-		return ["Semua", ...categorySet]
-	}, [apiCategories, events])
+	}, [activeCategoryId, sortOrder])
 
 	const categoryOptions = useMemo<EventCategoryOption[]>(() => {
-		const countByCategory = events.reduce<Record<string, number>>((accumulator, item) => {
-			accumulator[item.category] = (accumulator[item.category] || 0) + 1
-			return accumulator
-		}, {})
-
-		const categoryMetaByName = new Map<string, EventCategoryOption>()
-		apiCategories.forEach((category) => {
-			categoryMetaByName.set(category.name, category)
-		})
-
-		return categories
-			.filter((category) => category !== "Semua")
-			.map((category) => ({
-				id: categoryMetaByName.get(category)?.id || category,
-				name: category,
-				icon: categoryMetaByName.get(category)?.icon,
-				event_count: countByCategory[category] || 0,
-			}))
-	}, [apiCategories, categories, events])
-
-	useEffect(() => {
-		if (activeCategory !== "Semua" && !categories.includes(activeCategory)) {
-			setActiveCategory("Semua")
-		}
-	}, [activeCategory, categories])
-
-	const filteredCards = useMemo(() => {
-		const baseCards =
-			activeCategory === "Semua"
-				? events
-				: events.filter((item) => item.category === activeCategory)
-
-		const sorted = [...baseCards].sort((a, b) => {
-			const categoryCompare = a.category.localeCompare(b.category)
-			if (categoryCompare !== 0) {
-				return sortOrder === "category-asc" ? categoryCompare : -categoryCompare
-			}
-			return a.title.localeCompare(b.title)
-		})
-
-		return sorted
-	}, [activeCategory, events, sortOrder])
+		return apiCategories
+	}, [apiCategories])
 
 	return (
 		<main className="bg-[#f6f1e9] pb-0 pt-16 text-[#2f2416]">
@@ -165,12 +107,12 @@ const EventDetailPage = () => {
 			) : null}
 			<CategoryControls
 				categoryOptions={categoryOptions}
-				activeCategory={activeCategory}
+				activeCategoryId={activeCategoryId}
 				sortOrder={sortOrder}
-				onCategoryChange={setActiveCategory}
+				onCategoryChange={setActiveCategoryId}
 				onSortOrderChange={setSortOrder}
 			/>
-			<EventGrid events={filteredCards} />
+			<EventGrid events={events} />
 			<Engage />
 			<Footer />
 		</main>

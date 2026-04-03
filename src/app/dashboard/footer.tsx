@@ -26,7 +26,7 @@ const Footer = () => {
 					<div>
 						<div className="flex items-center gap-3">
 							<Image src={logo} alt="BudayaHub logo" className="h-10 w-10 object-contain" priority />
-							<h3 className="text-3xl font-semibold tracking-tight">BudayaHub</h3>
+							<h3 className="text-3xl font-semibold tracking-tight">LokaBudaya</h3>
 						</div>
 						<p className="mt-4 max-w-[28ch] text-base leading-relaxed text-[#3e2d15]">
 							Platform terdepan untuk event budaya di kota Malang. Menghubungkan pecinta
@@ -105,7 +105,7 @@ const Footer = () => {
 					</div>
 				</div>
 
-				<p className="pt-5 text-sm text-[#3e2d15]">© 2026 BudayaHub</p>
+				<p className="pt-5 text-sm text-[#3e2d15]">© 2026 LokaBudaya</p>
 			</div>
 		</footer>
 	)

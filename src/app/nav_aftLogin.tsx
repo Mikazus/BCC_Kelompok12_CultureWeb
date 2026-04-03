@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { logoutUser } from '@/Services/authService'
 import { clearAuthTokenCookie, getAuthTokenCookie } from '@/lib/authCookie'
+import type { UserRole } from '@/types/api/auth'
 import logoW from '../image/logo_w.png'
 
 const navItems = [
@@ -17,9 +18,10 @@ const navItems = [
 
 type NavAfterLoginProps = {
   profileName?: string
+  profileRole?: UserRole | null
 }
 
-const Nav = ({ profileName }: NavAfterLoginProps) => {
+const Nav = ({ profileName, profileRole }: NavAfterLoginProps) => {
   const router = useRouter()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -62,6 +64,17 @@ const Nav = ({ profileName }: NavAfterLoginProps) => {
     }
   }
 
+  const handlePromotorMenu = () => {
+    if (profileRole === 'promotor') {
+      setIsMenuOpen(false)
+      router.push('/promotor/dashboard')
+      return
+    }
+
+    window.alert('Akses ditolak. Menu Promotor hanya untuk akun promotor.')
+    setIsMenuOpen(false)
+  }
+
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-4xl">
       <nav
@@ -76,8 +89,8 @@ const Nav = ({ profileName }: NavAfterLoginProps) => {
       >
         {/* Logo */}
         <div className="flex items-center gap-2 shrink-0">
-          <Image src={logoW} alt="budayaHub logo" width={28} height={28} priority />
-          <span className="text-white font-semibold text-sm tracking-wide" style={navTextStroke}>budayaHub</span>
+          <Image src={logoW} alt="LokaBudaya logo" width={28} height={28} priority />
+          <span className="text-white font-semibold text-sm tracking-wide" style={navTextStroke}>LokaBudaya</span>
         </div>
 
         {/* Nav links */}
@@ -125,6 +138,13 @@ const Nav = ({ profileName }: NavAfterLoginProps) => {
                 >
                   Menu Utama
                 </Link>
+                <button
+                  type="button"
+                  onClick={handlePromotorMenu}
+                  className="mt-1 w-full rounded-lg px-2 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-white/10"
+                >
+                  Menu Promotor
+                </button>
                 <button
                   type="button"
                   onClick={handleLogout}

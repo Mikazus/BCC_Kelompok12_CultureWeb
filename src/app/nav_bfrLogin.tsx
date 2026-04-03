@@ -26,8 +26,8 @@ const Nav = () => {
       >
         {/* Logo */}
         <div className="flex items-center gap-2 shrink-0">
-          <Image src={logoW} alt="budayaHub logo" width={28} height={28} priority />
-          <span className="text-white font-semibold text-sm tracking-wide" style={navTextStroke}>budayaHub</span>
+          <Image src={logoW} alt="LokaBudaya logo" width={28} height={28} priority />
+          <span className="text-white font-semibold text-sm tracking-wide" style={navTextStroke}>LokaBudaya</span>
         </div>
 
         {/* Nav links */}

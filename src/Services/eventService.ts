@@ -1,11 +1,21 @@
 import dashImage from "@/image/dash.png";
 import api from "@/lib/api";
 import type { EventCard } from "@/app/EventHighlight/types";
-import type { ApidogModel, EventApiItem, EventListResponse } from "../types/api/event";
+import type {
+  ApidogModel,
+  CreateEventPayload,
+  CreateEventResponse,
+  EventApiItem,
+  EventAttendeeApiItem,
+  EventAttendeeListResponse,
+  EventAttendeeQueryOptions,
+  EventListResponse,
+} from "../types/api/event";
 import type { EventComment } from "@/app/EventDetail/data";
 
 const DEFAULT_EVENTS_ENDPOINT = "/events";
 const FALLBACK_EVENTS_ENDPOINT = "/event";
+const DEFAULT_MY_EVENTS_ENDPOINT = "/me/events";
 const DEFAULT_CATEGORIES_ENDPOINT = "/categories";
 const DEFAULT_EVENT_DETAIL_ENDPOINT_PREFIX = "/events";
 
@@ -16,6 +26,16 @@ export type EventCategoryOption = {
   name: string;
   icon?: string;
   event_count?: number;
+};
+
+export type PromotorAttendee = {
+  id: string;
+  fullName: string;
+  ticketCategory: string;
+  paymentStatus: "lunas" | "menunggu" | "dibatalkan";
+  registeredAt: string;
+  checkedIn: boolean;
+  ticketCode: string;
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -223,6 +243,29 @@ const extractEventArray = (payload: unknown): EventApiItem[] => {
   return [];
 };
 
+const isLikelyEventItem = (rawItem: EventApiItem) => {
+  const item = isObject(rawItem) ? rawItem : {};
+  const eventSignalKeys = [
+    "location",
+    "city",
+    "venue",
+    "event_date",
+    "start_date",
+    "start_at",
+    "price",
+    "ticket_price",
+    "is_free",
+    "quota",
+    "remaining_tickets",
+    "image",
+    "banner",
+    "description",
+    "slug",
+  ];
+
+  return eventSignalKeys.some((key) => key in item);
+};
+
 const extractCategoryArray = (payload: unknown): EventCategoryOption[] => {
   const normalizeCategory = (value: unknown): EventCategoryOption | null => {
     if (typeof value === "string" && value.trim()) {
@@ -242,14 +285,24 @@ const extractCategoryArray = (payload: unknown): EventCategoryOption[] => {
       }
       const id = firstString(item, ["id", "category_id", "uuid", "slug"], name);
       const icon = firstString(item, ["icon", "icon_url", "image", "image_url"], "");
-      const rawEventCount = firstNumber(item, ["event_count", "events_count", "count"], 0);
-      const event_count = typeof rawEventCount === "number" ? rawEventCount : Number(rawEventCount) || 0;
+      const hasEventCount =
+        typeof item.event_count !== "undefined" ||
+        typeof item.events_count !== "undefined" ||
+        typeof item.count !== "undefined";
+
+      const rawEventCount = hasEventCount ? firstNumber(item, ["event_count", "events_count", "count"], "") : "";
+      const event_count =
+        typeof rawEventCount === "number"
+          ? rawEventCount
+          : typeof rawEventCount === "string" && rawEventCount.trim()
+            ? Number(rawEventCount) || undefined
+            : undefined;
 
       return {
         id,
         name,
         ...(icon ? { icon } : {}),
-        event_count,
+        ...(typeof event_count === "number" ? { event_count } : {}),
       };
     }
 
@@ -263,8 +316,9 @@ const extractCategoryArray = (payload: unknown): EventCategoryOption[] => {
 
     const deduped = new Map<string, EventCategoryOption>();
     values.forEach((item) => {
-      if (!deduped.has(item.name)) {
-        deduped.set(item.name, item);
+      const dedupeKey = item.id || item.name;
+      if (!deduped.has(dedupeKey)) {
+        deduped.set(dedupeKey, item);
       }
     });
 
@@ -342,12 +396,75 @@ export const getEventsByQuery = async (options: EventQueryOptions) => {
   return [];
 };
 
+export const getMyEvents = async (token: string, options: EventQueryOptions = {}) => {
+  const configuredEndpoint = process.env.NEXT_PUBLIC_MY_EVENTS_ENDPOINT?.trim();
+  const endpoint = configuredEndpoint || DEFAULT_MY_EVENTS_ENDPOINT;
+
+  const params: ApidogModel = {
+    ...options,
+    limit: options.limit ?? "20",
+    page: options.page ?? "1",
+    search: options.search ?? "",
+    category_id: options.category_id ?? "",
+    sort_by: options.sort_by ?? "created_at",
+    sort_order: options.sort_order ?? "desc",
+  };
+
+  const response = await api.get<unknown>(endpoint, {
+    params,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const rawItems = extractEventArray(response.data);
+  const likelyEvents = rawItems.filter(isLikelyEventItem);
+  return likelyEvents.map(normalizeEvent);
+};
+
 export const getCategories = async () => {
   const configuredEndpoint = process.env.NEXT_PUBLIC_CATEGORIES_ENDPOINT?.trim();
   const endpoint = configuredEndpoint || DEFAULT_CATEGORIES_ENDPOINT;
 
   const response = await api.get<unknown>(endpoint);
   return extractCategoryArray(response.data);
+};
+
+export const createEvent = async (token: string, payload: CreateEventPayload) => {
+  const formData = new FormData();
+
+  const appendStringField = (key: keyof CreateEventPayload) => {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) {
+      formData.append(key, value);
+    }
+  };
+
+  appendStringField("category_id");
+  appendStringField("title");
+  appendStringField("summary");
+  appendStringField("description");
+  appendStringField("venue");
+  appendStringField("address");
+  appendStringField("google_maps_url");
+  appendStringField("start_date");
+  appendStringField("end_date");
+  appendStringField("registration_deadline");
+  appendStringField("is_paid");
+  appendStringField("price");
+  appendStringField("quota");
+
+  if (payload.banner instanceof File) {
+    formData.append("banner", payload.banner);
+  }
+
+  const response = await api.post<CreateEventResponse>("/events", formData, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return response.data;
 };
 
 export const getEventBySlug = async (slug: string) => {
@@ -402,6 +519,157 @@ const normalizeComment = (rawItem: unknown, index: number): EventComment => {
     text,
     timeLabel,
   };
+};
+
+const extractAttendeeArray = (payload: unknown): EventAttendeeApiItem[] => {
+  if (Array.isArray(payload)) {
+    return payload as EventAttendeeApiItem[];
+  }
+
+  if (!isObject(payload)) {
+    return [];
+  }
+
+  const response = payload as EventAttendeeListResponse;
+
+  if (Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  if (isObject(response.data)) {
+    if (Array.isArray(response.data.data)) {
+      return response.data.data;
+    }
+    if (Array.isArray(response.data.attendees)) {
+      return response.data.attendees;
+    }
+  }
+
+  if (Array.isArray(response.attendees)) {
+    return response.attendees;
+  }
+
+  if (Array.isArray(response.results)) {
+    return response.results;
+  }
+
+  return [];
+};
+
+const normalizePaymentStatus = (value: string): PromotorAttendee["paymentStatus"] => {
+  const normalized = value.trim().toLowerCase();
+
+  if (["lunas", "paid", "settlement", "success", "berhasil"].includes(normalized)) {
+    return "lunas";
+  }
+
+  if (["dibatalkan", "cancel", "cancelled", "failed", "expire", "expired"].includes(normalized)) {
+    return "dibatalkan";
+  }
+
+  return "menunggu";
+};
+
+const formatDateTimeMultiline = (raw: string) => {
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return "-";
+  }
+
+  const dateText = parsed.toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
+  const timeText = parsed.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  return `${dateText}\n${timeText} WIB`;
+};
+
+const normalizeAttendee = (rawItem: EventAttendeeApiItem, index: number): PromotorAttendee => {
+  const item = isObject(rawItem) ? rawItem : {};
+  const userObject = isObject(item.user) ? item.user : null;
+
+  const fullName =
+    firstString(item, ["name", "full_name", "user_name", "holder_name"], "") ||
+    (userObject ? firstString(userObject, ["name", "full_name"], "") : "") ||
+    `Peserta ${index + 1}`;
+
+  const rawStatus =
+    firstString(item, ["payment_status", "status", "transaction_status"], "") ||
+    (userObject ? firstString(userObject, ["payment_status", "status"], "") : "");
+
+  const registeredAtRaw =
+    firstString(item, ["created_at", "createdAt", "registered_at", "booked_at"], "") ||
+    (userObject ? firstString(userObject, ["created_at", "createdAt"], "") : "");
+
+  const checkedIn =
+    item.checked_in === true ||
+    item.is_checked_in === true ||
+    firstString(item, ["attendance_status", "checkin_status"], "").toLowerCase() === "checked_in" ||
+    Boolean(firstString(item, ["checked_in_at"], ""));
+
+  const ticketCode =
+    firstString(item, ["ticket_code", "ticketCode", "code", "qr_code", "qrCode"], "") ||
+    firstString(item, ["id", "ticket_id"], `ticket-${index + 1}`);
+
+  return {
+    id: firstString(item, ["id", "attendee_id", "ticket_id", "user_id"], `attendee-${index + 1}`),
+    fullName,
+    ticketCategory: firstString(item, ["ticket_type", "tier", "category"], "Reguler"),
+    paymentStatus: normalizePaymentStatus(rawStatus || "pending"),
+    registeredAt: registeredAtRaw ? formatDateTimeMultiline(registeredAtRaw) : "-",
+    checkedIn,
+    ticketCode,
+  };
+};
+
+export const getEventAttendees = async (
+  token: string,
+  eventId: string,
+  options: EventAttendeeQueryOptions = {}
+): Promise<PromotorAttendee[]> => {
+  const safeEventId = eventId.trim();
+  const params: EventAttendeeQueryOptions = {
+    search: typeof options.search === "string" ? options.search : "",
+    page: typeof options.page === "string" ? options.page : "1",
+    limit: typeof options.limit === "string" ? options.limit : "20",
+  };
+
+  const response = await api.get<unknown>(`/events/${safeEventId}/attendees`, {
+    params,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const rows = extractAttendeeArray(response.data);
+  return rows.map(normalizeAttendee);
+};
+
+export const checkInEventTicket = async (token: string, eventId: string, ticketCode: string) => {
+  const safeEventId = eventId.trim();
+  const safeTicketCode = ticketCode.trim();
+
+  const response = await api.post(
+    `/events/${safeEventId}/check-in`,
+    {
+      ticket_code: safeTicketCode,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  return response.data;
 };
 
 export const getEventComments = async (eventId: string) => {

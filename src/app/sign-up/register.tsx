@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { registerUser } from '@/Services/authService'
 import { getApiErrorMessage } from '@/lib/apiError'
+import type { UserRole } from '@/types/api/auth'
 import dignImage from '@/image/sign.png'
 
 export default function SignUp() {
@@ -16,6 +17,7 @@ export default function SignUp() {
 	const [confirmPassword, setConfirmPassword] = useState('')
 	const [phone, setPhone] = useState('')
 	const [gender, setGender] = useState<'male' | 'female'>('male')
+	const [role, setRole] = useState<UserRole>('user')
 	const [rememberMe, setRememberMe] = useState(false)
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -65,7 +67,7 @@ export default function SignUp() {
 				password,
 				confirmPassword,
 				phone: phone.trim(),
-				role: 'user',
+				role,
 				gender,
 			})
 
@@ -76,6 +78,7 @@ export default function SignUp() {
 			setConfirmPassword('')
 			setPhone('')
 			setGender('male')
+			setRole('user')
 			setRememberMe(false)
 
 			setTimeout(() => {
@@ -163,6 +166,21 @@ export default function SignUp() {
 								>
 									<option value="male">Male</option>
 									<option value="female">Female</option>
+								</select>
+							</div>
+
+							<div>
+								<label htmlFor="role" className="mb-2 block text-lg font-medium text-[#201a12]">
+									Role<span className="text-[#a12a2a]">*</span>
+								</label>
+								<select
+									id="role"
+									value={role}
+									onChange={(event) => setRole(event.target.value as UserRole)}
+									className="h-12 w-full rounded-xl border border-[#b8b8b8] bg-transparent px-4 text-[#201a12] outline-none ring-0 transition-colors focus:border-[#9a7b45]"
+								>
+									<option value="user">User</option>
+									<option value="promotor">Promotor</option>
 								</select>
 							</div>
 						</div>

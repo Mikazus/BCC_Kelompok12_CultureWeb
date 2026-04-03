@@ -2,7 +2,7 @@ import type { StaticImageData } from "next/image"
 
 export type EventCategory = string
 
-export type SortOrder = "category-asc" | "category-desc"
+export type SortOrder = "asc" | "desc"
 
 export type CategoryFilter = "Semua" | EventCategory
 
