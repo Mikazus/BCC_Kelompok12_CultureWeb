@@ -10,6 +10,11 @@ const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin']
 export const metadata: Metadata = {
   title: 'LokaBudaya',
   description: 'Platform budaya Indonesia — Event, Kompetisi, dan Bazar',
+  icons: {
+    icon: '/logo_w.png',
+    shortcut: '/logo_w.png',
+    apple: '/logo_w.png',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

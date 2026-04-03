@@ -6,10 +6,12 @@ import Wflow from './flow'
 import Review from './review'
 import Engage from './engage'
 import Footer from './footer'
+import OpeningMaskOverlay from './openingMaskOverlay'
 
 const DashboardPage = () => {
   return (
     <main className="bg-[#f6f1e9] pb-0 pt-16">
+      <OpeningMaskOverlay />
       <Main />
       <NAV />
       <Event />

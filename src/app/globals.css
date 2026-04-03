@@ -113,6 +113,96 @@ body.route-enter main {
   -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
+.opening-mask-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  background: #463820;
+  opacity: 1;
+  transition: opacity 700ms var(--fluid-ease);
+  pointer-events: none;
+}
+
+.opening-mask-overlay.is-fading {
+  opacity: 0;
+}
+
+.opening-mask-stage {
+  position: relative;
+  width: clamp(360px, 72vw, 820px);
+  aspect-ratio: 1 / 1;
+}
+
+.opening-mask-full,
+.opening-mask-split {
+  position: absolute;
+  inset: 0;
+}
+
+.opening-mask-full {
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+
+.opening-mask-full.is-hidden {
+  opacity: 0;
+  transform: scale(0.94);
+}
+
+.opening-mask-split {
+  opacity: 0;
+}
+
+.opening-mask-split.is-cracked {
+  opacity: 1;
+}
+
+.opening-mask-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.opening-mask-left,
+.opening-mask-right {
+  position: absolute;
+  inset: 0;
+  transform: translateX(0) scale(1);
+}
+
+.opening-mask-split.is-cracked .opening-mask-left {
+  animation: opening-mask-left-crack 900ms var(--fluid-ease) forwards;
+}
+
+.opening-mask-split.is-cracked .opening-mask-right {
+  animation: opening-mask-right-crack 900ms var(--fluid-ease) forwards;
+}
+
+@keyframes opening-mask-left-crack {
+  to {
+    opacity: 0;
+    transform: translateX(-28px) rotate(-4deg) scale(0.95);
+  }
+}
+
+@keyframes opening-mask-right-crack {
+  to {
+    opacity: 0;
+    transform: translateX(28px) rotate(4deg) scale(0.95);
+  }
+}
+
+@media (max-width: 768px) {
+  .opening-mask-stage {
+    width: min(94vw, 620px);
+  }
+}
+
 @media (max-width: 768px) {
   html,
   body {
