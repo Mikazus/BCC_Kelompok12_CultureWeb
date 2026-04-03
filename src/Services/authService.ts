@@ -1,10 +1,12 @@
 import api from "@/lib/api";
 import type {
+  ChangePasswordRequest,
   LoginRequest,
   LoginResponse,
   LoginResult,
   MeResponse,
   MeResult,
+  UpdateProfileRequest,
   RegisterRequest,
   RegisterResponse,
   RegisterResult,
@@ -117,6 +119,13 @@ const extractUserProfile = (response: MeResponse) => {
     ("email" in userObject && typeof userObject.email === "string" && userObject.email.trim()) ||
     "";
 
+  const phone =
+    ("phone" in userObject && typeof userObject.phone === "string" && userObject.phone.trim()) ||
+    ("phone_number" in userObject &&
+      typeof userObject.phone_number === "string" &&
+      userObject.phone_number.trim()) ||
+    "";
+
   const role =
     normalizeRole("role" in userObject ? userObject.role : null) ||
     normalizeRole("user_role" in userObject ? userObject.user_role : null) ||
@@ -129,6 +138,7 @@ const extractUserProfile = (response: MeResponse) => {
   return {
     name,
     email,
+    phone,
     role,
   };
 };
@@ -145,6 +155,7 @@ export const getMe = async (token: string) => {
   const result: MeResult = {
     name: profile.name,
     email: profile.email,
+    phone: profile.phone,
     role: profile.role,
     raw: res.data,
   };
@@ -162,4 +173,81 @@ export const logoutUser = async (token: string) => {
       },
     }
   );
+};
+
+export const updateMyProfile = async (token: string, payload: UpdateProfileRequest) => {
+  const formData = new FormData();
+
+  if (typeof payload.name === "string" && payload.name.trim()) {
+    formData.append("name", payload.name.trim());
+  }
+
+  if (typeof payload.email === "string" && payload.email.trim()) {
+    formData.append("email", payload.email.trim());
+  }
+
+  if (typeof payload.phone === "string" && payload.phone.trim()) {
+    formData.append("phone", payload.phone.trim());
+  }
+
+  const response = await fetch("/api/me", {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  const raw = await response.text();
+  let payloadResponse: unknown = null;
+  try {
+    payloadResponse = raw ? JSON.parse(raw) : null;
+  } catch {
+    payloadResponse = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      typeof payloadResponse === "object" &&
+      payloadResponse !== null &&
+      "message" in payloadResponse &&
+      typeof (payloadResponse as { message?: unknown }).message === "string"
+        ? ((payloadResponse as { message: string }).message || "Gagal memperbarui profil.")
+        : "Gagal memperbarui profil.";
+    throw new Error(message);
+  }
+
+  return payloadResponse;
+};
+
+export const changeMyPassword = async (token: string, payload: ChangePasswordRequest) => {
+  const response = await fetch("/api/me/password", {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const raw = await response.text();
+  let payloadResponse: unknown = null;
+  try {
+    payloadResponse = raw ? JSON.parse(raw) : null;
+  } catch {
+    payloadResponse = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      typeof payloadResponse === "object" &&
+      payloadResponse !== null &&
+      "message" in payloadResponse &&
+      typeof (payloadResponse as { message?: unknown }).message === "string"
+        ? ((payloadResponse as { message: string }).message || "Gagal mengubah kata sandi.")
+        : "Gagal mengubah kata sandi.";
+    throw new Error(message);
+  }
+
+  return payloadResponse;
 };

@@ -13,6 +13,8 @@ const Hero = ({ detail }: HeroProps) => {
 				<Image
 					src={detail.image}
 					alt={detail.title}
+					width={1600}
+					height={900}
 					priority
 					className="h-[360px] w-full object-cover md:h-[430px] lg:h-[500px]"
 				/>

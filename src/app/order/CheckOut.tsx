@@ -20,7 +20,7 @@ type TicketForm = {
 const DEFAULT_EVENT_ID = "bcdfacb6-d3ab-48b8-bedc-67b70d6af058"
 const DEFAULT_EVENT_TITLE = "Tari Topeng Malang"
 const DEFAULT_TICKET_PRICE = 40000
-const SERVICE_FEE = 2000
+const SERVICE_FEE_PER_TICKET = 2000
 const MIN_TICKETS = 1
 const MAX_TICKETS = 10
 const PROCESS_STEPS = ["Pendaftaran", "Pembayaran", "Selesai"] as const
@@ -187,7 +187,10 @@ const CheckOut = () => {
 	}
 
 	const subtotal = useMemo(() => ticketPrice * ticketCount, [ticketPrice, ticketCount])
-	const serviceFee = useMemo(() => (ticketPrice > 0 ? SERVICE_FEE : 0), [ticketPrice])
+	const serviceFee = useMemo(
+		() => (ticketPrice > 0 ? SERVICE_FEE_PER_TICKET * ticketCount : 0),
+		[ticketPrice, ticketCount]
+	)
 	const total = useMemo(() => subtotal + serviceFee, [subtotal, serviceFee])
 
 	const handleSubmit = async () => {

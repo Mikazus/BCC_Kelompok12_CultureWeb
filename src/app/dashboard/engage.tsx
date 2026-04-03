@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 const Engage = () => {
 	return (
 		<section className="bg-[#f6f1e9] pb-18 pt-8">
@@ -10,9 +12,9 @@ const Engage = () => {
 					Bergabung dengan ribuan pecinta budaya event di Malang.
 				</p>
 
-				<button className="mt-8 inline-flex h-12 w-full max-w-sm items-center justify-center rounded-full bg-[#9f7a3f] px-6 text-base font-semibold text-[#f9f3e9] transition-colors hover:bg-[#8d6b36] sm:h-14 sm:text-lg">
+				<Link href="/EventHighlight" className="mt-8 inline-flex h-12 w-full max-w-sm items-center justify-center rounded-full bg-[#9f7a3f] px-6 text-base font-semibold text-[#f9f3e9] transition-colors hover:bg-[#8d6b36] sm:h-14 sm:text-lg">
 					Pesan Sekarang
-				</button>
+				</Link>
 			</div>
 		</section>
 	)

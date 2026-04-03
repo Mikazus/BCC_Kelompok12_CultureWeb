@@ -47,12 +47,29 @@ export type MeResponse = {
   user?: unknown;
   name?: string;
   email?: string;
+  phone?: string;
   [key: string]: unknown;
 };
 
 export type MeResult = {
   name: string;
   email: string;
+  phone: string;
   role: UserRole | null;
   raw: MeResponse;
+};
+
+export interface ApidogModel {
+  email?: string;
+  name?: string;
+  phone?: string;
+  [property: string]: unknown;
+}
+
+export type UpdateProfileRequest = ApidogModel;
+
+export type ChangePasswordRequest = {
+  current_password: string;
+  new_password: string;
+  confirm_new_password: string;
 };

@@ -1,11 +1,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { getEventsByQuery } from '@/Services/eventService'
-import type { ImageLoaderProps } from 'next/image'
 import type { ApidogModel } from '@/types/api/event'
 import type { EventCard } from '../EventHighlight/types'
-
-const passthroughLoader = ({ src }: ImageLoaderProps) => src
 
 const buildSummary = (event: EventCard) => {
 	if (event.summary && event.summary.trim()) {
@@ -70,8 +67,6 @@ const Fore = async () => {
 						>
 							<div className="relative h-40 w-full">
 								<Image
-									loader={typeof event.image === 'string' ? passthroughLoader : undefined}
-									unoptimized={typeof event.image === 'string'}
 									src={event.image}
 									alt={event.title}
 									fill

@@ -4,6 +4,7 @@ import type { EventCard } from "@/app/EventHighlight/types";
 import type {
   ApidogModel,
   CreateEventPayload,
+  CreateEventResult,
   CreateEventResponse,
   EventApiItem,
   EventAttendeeApiItem,
@@ -36,6 +37,77 @@ export type PromotorAttendee = {
   registeredAt: string;
   checkedIn: boolean;
   ticketCode: string;
+};
+
+export type PromotorEditableEvent = {
+  id: string;
+  title: string;
+  description: string;
+  startDate: string;
+  startTime: string;
+  venue: string;
+  imageUrl: string;
+  ticketName: string;
+  ticketPrice: string;
+  ticketCapacity: string;
+  ticketSold: number;
+  ticketStatus: string;
+};
+
+const toDateInputValue = (raw: string) => {
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const toTimeInputValue = (raw: string) => {
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  const hour = String(parsed.getHours()).padStart(2, "0");
+  const minute = String(parsed.getMinutes()).padStart(2, "0");
+  return `${hour}:${minute}`;
+};
+
+const normalizeEditableEvent = (raw: unknown, fallbackId = ""): PromotorEditableEvent => {
+  const item = isObject(raw) ? raw : {};
+  const startDateRaw = firstString(item, ["start_date", "event_date", "date", "startAt", "start_at"], "");
+  const title = firstString(item, ["title", "name", "event_name"], "Event");
+  const quota = firstNumber(item, ["quota", "capacity", "total_quota"], "0");
+  const sold = firstNumber(item, ["sold", "sold_count", "total_sold", "tickets_sold"], "0");
+  const price = firstNumber(item, ["price", "ticket_price", "amount"], "0");
+
+  const quotaNumber = typeof quota === "number" ? quota : Number(quota) || 0;
+  const soldNumber = typeof sold === "number" ? sold : Number(sold) || 0;
+
+  const id =
+    firstString(item, ["id", "event_id", "uuid"], "") ||
+    (typeof item.id === "number" ? String(item.id) : fallbackId);
+
+  const imageUrl = firstString(item, ["image", "image_url", "thumbnail", "banner", "banner_url", "photo"], "");
+
+  return {
+    id,
+    title,
+    description: firstString(item, ["description", "summary", "excerpt"], ""),
+    startDate: toDateInputValue(startDateRaw),
+    startTime: toTimeInputValue(startDateRaw),
+    venue: firstString(item, ["venue", "location", "city", "place"], ""),
+    imageUrl,
+    ticketName: firstString(item, ["ticket_name", "ticket_type", "ticket_label"], `${title} Ticket`),
+    ticketPrice: String(typeof price === "number" ? Math.max(0, price) : Number(price) || 0),
+    ticketCapacity: String(Math.max(0, quotaNumber)),
+    ticketSold: Math.max(0, soldNumber),
+    ticketStatus: Math.max(0, quotaNumber - soldNumber) > 0 ? "Tersedia" : "Habis",
+  };
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -464,7 +536,71 @@ export const createEvent = async (token: string, payload: CreateEventPayload) =>
     },
   });
 
-  return response.data;
+  const data = response.data;
+  const nestedData = isObject(data.data) ? (data.data as Record<string, unknown>) : null;
+
+  const paymentUrlCandidates = [data.payment_url, data.paymentUrl, nestedData?.payment_url, nestedData?.paymentUrl];
+  const paymentTokenCandidates = [
+    data.payment_token,
+    data.paymentToken,
+    nestedData?.payment_token,
+    nestedData?.paymentToken,
+  ];
+  const eventIdCandidates = [data.id, data.event_id, nestedData?.id, nestedData?.event_id];
+
+  const paymentUrl =
+    paymentUrlCandidates.find((item) => typeof item === "string" && item.trim())?.toString().trim() || null;
+  const paymentToken =
+    paymentTokenCandidates.find((item) => typeof item === "string" && item.trim())?.toString().trim() || null;
+  const eventId =
+    eventIdCandidates.find((item) => (typeof item === "string" || typeof item === "number") && String(item).trim())
+      ?.toString()
+      .trim() || null;
+
+  const result: CreateEventResult = {
+    success: data.success !== false,
+    message:
+      (typeof data.message === "string" && data.message.trim()) ||
+      (paymentUrl ? "Event dibuat. Lanjutkan pembayaran agar event ditampilkan." : "Event berhasil dibuat."),
+    eventId,
+    paymentUrl,
+    paymentToken,
+    raw: data,
+  };
+
+  return result;
+};
+
+export const markEventAsPaid = async (token: string, eventId: string) => {
+  const safeEventId = eventId.trim();
+  if (!safeEventId) {
+    throw new Error("Event ID tidak valid untuk update pembayaran.");
+  }
+
+  const payload = {
+    is_paid: "true",
+  };
+
+  const endpoints = [`/events/${safeEventId}`, `/events/${safeEventId}/payment`, `/events/${safeEventId}/publish`];
+
+  let lastError: unknown = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await api.patch(endpoint, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Gagal mengubah status pembayaran event.");
 };
 
 export const getEventBySlug = async (slug: string) => {
@@ -473,6 +609,88 @@ export const getEventBySlug = async (slug: string) => {
   const response = await api.get<unknown>(`${detailPrefix}/${safeSlug}`);
   const events = extractEventArray(response.data).map(normalizeEvent);
   return events[0] || null;
+};
+
+export const getPromotorEventById = async (token: string, eventId: string): Promise<PromotorEditableEvent | null> => {
+  const safeEventId = eventId.trim();
+  if (!safeEventId) {
+    return null;
+  }
+
+  const response = await api.get<unknown>(`/events/${safeEventId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const rows = extractEventArray(response.data);
+  const firstItem = rows[0] || (isObject(response.data) && isObject(response.data.data) ? response.data.data : null);
+
+  if (!firstItem) {
+    return null;
+  }
+
+  return normalizeEditableEvent(firstItem, safeEventId);
+};
+
+export type UpdatePromotorEventPayload = {
+  title: string;
+  description: string;
+  venue: string;
+  start_date: string;
+  banner?: File | null;
+};
+
+export const updatePromotorEvent = async (token: string, eventId: string, payload: UpdatePromotorEventPayload) => {
+  const safeEventId = eventId.trim();
+  if (!safeEventId) {
+    throw new Error("Event ID tidak valid untuk edit.");
+  }
+
+  const formData = new FormData();
+  formData.append("title", payload.title.trim());
+  formData.append("description", payload.description.trim());
+  formData.append("venue", payload.venue.trim());
+  formData.append("start_date", payload.start_date.trim());
+
+  if (payload.banner instanceof File) {
+    formData.append("banner", payload.banner);
+  }
+
+  const response = await api.patch(`/events/${safeEventId}`, formData, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return response.data;
+};
+
+export const deletePromotorEvent = async (token: string, eventId: string) => {
+  const safeEventId = eventId.trim();
+  if (!safeEventId) {
+    throw new Error("Event ID tidak valid untuk hapus event.");
+  }
+
+  const endpoints = [`/events/${safeEventId}`, `/me/events/${safeEventId}`, `/events/${safeEventId}/delete`];
+
+  let lastError: unknown = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await api.delete(endpoint, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Gagal menghapus event.");
 };
 
 const extractCommentArray = (payload: unknown): unknown[] => {

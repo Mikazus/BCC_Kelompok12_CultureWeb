@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { FaRegCalendar } from "react-icons/fa6"
 import { HiMapPin } from "react-icons/hi2"
 import { LuClock3 } from "react-icons/lu"
@@ -15,7 +16,7 @@ import { getAuthTokenCookie } from "@/lib/authCookie"
 import { readPaymentContext } from "../../order/paymentResultStorage"
 
 const SIDEBAR_ITEMS = [
-	{ label: "Profil Saya", href: "#" },
+	{ label: "Profil Saya", href: "/dashboard/mainMenu/myProfile" },
 	{ label: "Ticket Saya", href: "/dashboard/mainMenu", active: true },
 	{ label: "Riwayat Transaksi", href: "/dashboard/history" },
 ]
@@ -59,10 +60,14 @@ const createFallbackTicketFromContext = (): MyTicket | null => {
 }
 
 const MyOrder = () => {
+	const router = useRouter()
 	const [tickets, setTickets] = useState<MyTicket[]>([])
 	const [fallbackTicket, setFallbackTicket] = useState<MyTicket | null>(null)
 	const [isLoading, setIsLoading] = useState(true)
 	const [errorMessage, setErrorMessage] = useState<string | null>(null)
+	const [downloadError, setDownloadError] = useState<string | null>(null)
+	const [downloadingTicketId, setDownloadingTicketId] = useState<string | null>(null)
+	const [openingDetailTicketId, setOpeningDetailTicketId] = useState<string | null>(null)
 
 	useEffect(() => {
 		setFallbackTicket(createFallbackTicketFromContext())
@@ -127,6 +132,210 @@ const MyOrder = () => {
 		return displayTickets.slice(1)
 	}, [displayTickets])
 
+	const resolveDownloadUrlFromJson = (payload: unknown) => {
+		if (typeof payload !== "object" || payload === null) {
+			return null
+		}
+
+		const data = payload as Record<string, unknown>
+		const nested = typeof data.data === "object" && data.data !== null ? (data.data as Record<string, unknown>) : null
+
+		const candidates = [data.download_url, data.downloadUrl, data.url, nested?.download_url, nested?.downloadUrl, nested?.url]
+
+		for (const candidate of candidates) {
+			if (typeof candidate === "string" && candidate.trim()) {
+				return candidate.trim()
+			}
+		}
+
+		return null
+	}
+
+	const resolveEventTargetFromTicketDetail = (payload: unknown) => {
+		if (typeof payload !== "object" || payload === null) {
+			return null
+		}
+
+		const data = payload as Record<string, unknown>
+		const nested = typeof data.data === "object" && data.data !== null ? (data.data as Record<string, unknown>) : null
+		const eventFromData = typeof data.event === "object" && data.event !== null ? (data.event as Record<string, unknown>) : null
+		const eventFromNested = nested && typeof nested.event === "object" && nested.event !== null ? (nested.event as Record<string, unknown>) : null
+
+		const candidates = [data, nested, eventFromData, eventFromNested]
+
+		for (const item of candidates) {
+			if (!item) {
+				continue
+			}
+
+			const slugCandidate = item.slug
+			if (typeof slugCandidate === "string" && slugCandidate.trim()) {
+				return { type: "slug" as const, value: slugCandidate.trim() }
+			}
+
+			const idCandidate = item.event_id ?? item.id
+			if ((typeof idCandidate === "string" || typeof idCandidate === "number") && String(idCandidate).trim()) {
+				return { type: "id" as const, value: String(idCandidate).trim() }
+			}
+		}
+
+		return null
+	}
+
+	const handleOpenDetailAcara = async (ticket: MyTicket) => {
+		setDownloadError(null)
+
+		const token = getAuthTokenCookie()
+		if (!token) {
+			setDownloadError("Sesi login tidak ditemukan. Silakan login kembali.")
+			return
+		}
+
+		const ticketId = ticket.id?.trim()
+		if (!ticketId || ticketId.startsWith("local-")) {
+			setDownloadError("Detail acara belum tersedia untuk tiket lokal. Tunggu hingga tiket tersinkron dari server.")
+			return
+		}
+
+		setOpeningDetailTicketId(ticketId)
+
+		try {
+			const response = await fetch(`/api/me/tickets/${encodeURIComponent(ticketId)}`, {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			})
+
+			if (!response.ok) {
+				const raw = await response.text()
+				let message = "Gagal memuat detail acara."
+
+				try {
+					const parsed = JSON.parse(raw) as { message?: unknown }
+					if (typeof parsed.message === "string" && parsed.message.trim()) {
+						message = parsed.message
+					}
+				} catch {
+					if (raw.trim()) {
+						message = raw
+					}
+				}
+
+				throw new Error(message)
+			}
+
+			const json = (await response.json()) as unknown
+			const target = resolveEventTargetFromTicketDetail(json)
+
+			if (!target) {
+				router.push("/EventDetail")
+				return
+			}
+
+			if (target.type === "slug") {
+				router.push(`/EventDetail?slug=${encodeURIComponent(target.value)}`)
+				return
+			}
+
+			router.push(`/EventDetail?eventId=${encodeURIComponent(target.value)}`)
+		} catch (error) {
+			setDownloadError(getApiErrorMessage(error, "Gagal membuka detail acara."))
+		} finally {
+			setOpeningDetailTicketId(null)
+		}
+	}
+
+	const handleDownloadTicket = async (ticket: MyTicket) => {
+		setDownloadError(null)
+
+		const fallbackDownloadByOrderId = () => {
+			const orderId = ticket.orderId?.trim()
+			if (!orderId || orderId === "-") {
+				setDownloadError("Data tiket belum sinkron. Coba lagi setelah status tiket masuk ke akun Anda.")
+				return
+			}
+
+			window.location.assign(`/api/ticket/pdf?order_id=${encodeURIComponent(orderId)}`)
+		}
+
+		const token = getAuthTokenCookie()
+		if (!token) {
+			setDownloadError("Sesi login tidak ditemukan. Silakan login kembali.")
+			return
+		}
+
+		const ticketId = ticket.id?.trim()
+		if (!ticketId || ticketId.startsWith("local-")) {
+			fallbackDownloadByOrderId()
+			return
+		}
+
+		setDownloadingTicketId(ticketId)
+
+		try {
+			const response = await fetch(`/api/me/tickets/${encodeURIComponent(ticketId)}/download`, {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			})
+
+			if (!response.ok) {
+				const raw = await response.text()
+				let message = "Gagal mengunduh tiket."
+
+				try {
+					const parsed = JSON.parse(raw) as { message?: unknown }
+					if (typeof parsed.message === "string" && parsed.message.trim()) {
+						message = parsed.message
+					}
+				} catch {
+					if (raw.trim()) {
+						message = raw
+					}
+				}
+
+				throw new Error(message)
+			}
+
+			const contentType = response.headers.get("content-type") || ""
+
+			if (contentType.includes("application/json")) {
+				const json = (await response.json()) as unknown
+				const downloadUrl = resolveDownloadUrlFromJson(json)
+
+				if (!downloadUrl) {
+					throw new Error("Link download tiket tidak tersedia pada response API.")
+				}
+
+				window.location.assign(downloadUrl)
+				return
+			}
+
+			const blob = await response.blob()
+			const objectUrl = window.URL.createObjectURL(blob)
+			const anchor = document.createElement("a")
+			anchor.href = objectUrl
+			anchor.download = `${ticket.eventTitle || "ticket"}.pdf`
+			document.body.appendChild(anchor)
+			anchor.click()
+			anchor.remove()
+			window.URL.revokeObjectURL(objectUrl)
+		} catch (error) {
+			const message = getApiErrorMessage(error, "Gagal mengunduh tiket.")
+
+			if (message.toLowerCase().includes("ticket not found") || message.toLowerCase().includes("tiket tidak ditemukan")) {
+				fallbackDownloadByOrderId()
+				return
+			}
+
+			setDownloadError(message)
+		} finally {
+			setDownloadingTicketId(null)
+		}
+	}
+
 	return (
 		<main className="min-h-screen bg-[#f6f1e9] pt-20 text-[#2f2416]">
 			<section className="mx-auto w-[92%] max-w-338 pb-16">
@@ -154,8 +363,11 @@ const MyOrder = () => {
 					</aside>
 
 					<section>
-						<h1 className="text-5xl font-semibold leading-tight text-[#3f2f1a]">Tiket Saya</h1>
+						<h1 className="wrap-break-word text-4xl font-semibold leading-tight text-[#3f2f1a] sm:text-5xl">Tiket Saya</h1>
 						<p className="mt-1 text-sm text-[#6f5c40]">Kelola Tiket Anda Disini !</p>
+						{downloadError ? (
+							<p className="mt-3 rounded-xl border border-[#d59f8f] bg-[#fff2ef] px-4 py-3 text-sm text-[#8d2f2f]">{downloadError}</p>
+						) : null}
 
 						{isLoading ? (
 							<div className="mt-6 rounded-2xl border border-[#9f7a3f]/45 bg-[#f8f3eb] p-6 text-sm text-[#6d583a]">
@@ -185,7 +397,7 @@ const MyOrder = () => {
 												<span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-[#2d2113]" />
 												Mendatang
 											</span>
-											<h2 className="mt-3 text-[36px] font-semibold leading-tight text-[#1f1408]">{nearestTicket.eventTitle}</h2>
+											<h2 className="mt-3 text-3xl font-semibold leading-tight text-[#1f1408] sm:text-[36px]">{nearestTicket.eventTitle}</h2>
 
 											<div className="mt-5 flex flex-wrap gap-x-8 gap-y-3 text-sm font-medium text-[#3f3120]">
 												<p className="inline-flex items-center gap-2">
@@ -203,18 +415,22 @@ const MyOrder = () => {
 											</div>
 
 											<div className="mt-6 flex flex-wrap items-center gap-3">
-												<Link
-													href="/EventHighlight"
-													className="inline-flex h-10 min-w-38 items-center justify-center rounded-full bg-[#a7864f] px-8 text-sm font-semibold text-white transition-colors hover:bg-[#8f6f3e]"
+												<button
+													type="button"
+													onClick={() => handleOpenDetailAcara(nearestTicket)}
+													disabled={openingDetailTicketId === nearestTicket.id}
+													className="inline-flex h-10 w-full items-center justify-center rounded-full bg-[#a7864f] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#8f6f3e] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:min-w-38 sm:px-8"
 												>
-													Detail Acara
-												</Link>
-												<a
-													href={`/api/ticket/pdf?order_id=${encodeURIComponent(nearestTicket.orderId)}`}
-													className="inline-flex h-10 min-w-38 items-center justify-center rounded-full border border-[#bca27a] bg-white px-8 text-sm font-semibold text-[#493724] transition-colors hover:bg-[#f8f3eb]"
+													{openingDetailTicketId === nearestTicket.id ? "Membuka..." : "Detail Acara"}
+												</button>
+												<button
+													type="button"
+													onClick={() => handleDownloadTicket(nearestTicket)}
+													disabled={downloadingTicketId === nearestTicket.id}
+													className="inline-flex h-10 w-full items-center justify-center rounded-full border border-[#bca27a] bg-white px-5 text-sm font-semibold text-[#493724] transition-colors hover:bg-[#f8f3eb] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:min-w-38 sm:px-8"
 												>
-													Download PDF
-												</a>
+													{downloadingTicketId === nearestTicket.id ? "Mengunduh..." : "Download PDF"}
+												</button>
 											</div>
 										</div>
 
@@ -241,7 +457,7 @@ const MyOrder = () => {
 												) : null}
 											</div>
 											<div className="p-4">
-												<h3 className="text-2xl font-semibold text-[#1f1408]">{ticket.eventTitle}</h3>
+												<h3 className="wrap-break-word text-xl font-semibold text-[#1f1408] sm:text-2xl">{ticket.eventTitle}</h3>
 												<p className="mt-3 inline-flex items-center gap-2 text-sm text-[#4d3b24]">
 													<FaRegCalendar className="h-4 w-4" />
 													{ticket.eventDate}
@@ -250,12 +466,14 @@ const MyOrder = () => {
 													<HiMapPin className="h-4 w-4" />
 													{ticket.location}
 												</p>
-												<a
-													href={`/api/ticket/pdf?order_id=${encodeURIComponent(ticket.orderId)}`}
-													className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-full border border-[#bca27a] text-sm font-semibold text-[#4a3924] transition-colors hover:bg-[#f8f3eb]"
+												<button
+													type="button"
+													onClick={() => handleDownloadTicket(ticket)}
+													disabled={downloadingTicketId === ticket.id}
+													className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-full border border-[#bca27a] text-sm font-semibold text-[#4a3924] transition-colors hover:bg-[#f8f3eb] disabled:cursor-not-allowed disabled:opacity-70"
 												>
-													Lihat Tiket
-												</a>
+													{downloadingTicketId === ticket.id ? "Mengunduh..." : "Lihat Tiket"}
+												</button>
 											</div>
 										</article>
 									))}

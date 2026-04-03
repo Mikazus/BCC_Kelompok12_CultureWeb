@@ -3,6 +3,7 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --fluid-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @theme inline {
@@ -23,6 +24,77 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+* {
+  min-width: 0;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+body {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.route-enter main {
+  animation: fluid-page-enter 0.5s var(--fluid-ease) both;
+  will-change: opacity, transform;
+}
+
+@keyframes fluid-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(18px) scale(0.995);
+  filter: saturate(0.95);
+  transition:
+    opacity 0.75s var(--fluid-ease),
+    transform 0.75s var(--fluid-ease),
+    filter 0.75s var(--fluid-ease);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.scroll-reveal.is-revealed,
+.is-revealed {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: saturate(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  body.route-enter main,
+  .scroll-reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
 }
 
 .glass {
@@ -39,4 +111,17 @@ body {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+@media (max-width: 768px) {
+  html,
+  body {
+    width: 100%;
+    overflow-x: clip;
+  }
+
+  .mobile-stack-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }

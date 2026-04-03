@@ -218,7 +218,7 @@ export default function PromotorCheckListPage() {
 
 	return (
 		<div className="min-h-screen bg-[#A88648] text-[#433424]">
-			<div className="mx-auto flex min-h-screen w-full max-w-360 flex-col lg:flex-row">
+			<div className="flex min-h-screen w-full flex-col lg:flex-row">
 				<PromotorSidebar active="check-in" />
 
 				<div className="flex min-h-screen flex-1 flex-col bg-[#F4F1EC]">

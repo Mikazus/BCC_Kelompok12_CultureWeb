@@ -5,6 +5,8 @@ export type CheckoutActivity = {
 	event: string
 	time: string
 	price: string
+	quantity: number
+	amount: number
 }
 
 export type CheckoutTicketPayload = {
@@ -137,6 +139,21 @@ const formatPrice = (raw: unknown) => {
 	return "Rp 0"
 }
 
+const toPositiveNumber = (raw: unknown) => {
+	if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) {
+		return raw
+	}
+
+	if (typeof raw === "string" && raw.trim()) {
+		const parsed = Number(raw.replace(/[^\d.]/g, ""))
+		if (Number.isFinite(parsed) && parsed >= 0) {
+			return parsed
+		}
+	}
+
+	return 0
+}
+
 export const getCheckoutActivities = async (token: string): Promise<CheckoutActivity[]> => {
 	const endpoint = process.env.NEXT_PUBLIC_PROMOTOR_ACTIVITY_ENDPOINT?.trim() || "/me/tickets"
 
@@ -148,7 +165,7 @@ export const getCheckoutActivities = async (token: string): Promise<CheckoutActi
 
 	const rows = extractArray(response.data)
 
-	return rows.slice(0, 5).map((item, index) => {
+	return rows.map((item, index) => {
 		const eventObj = isObject(item.event) ? item.event : null
 		const eventName =
 			firstString(item, ["event_title", "eventTitle", "title"], "") ||
@@ -159,7 +176,7 @@ export const getCheckoutActivities = async (token: string): Promise<CheckoutActi
 			firstString(item, ["created_at", "createdAt", "paid_at", "updated_at"], "") ||
 			(eventObj ? firstString(eventObj, ["created_at", "updated_at"], "") : "")
 
-		const amount =
+		const amountRaw =
 			item.total_amount ??
 			item.totalAmount ??
 			item.gross_amount ??
@@ -167,11 +184,24 @@ export const getCheckoutActivities = async (token: string): Promise<CheckoutActi
 			item.amount ??
 			item.price
 
+		const quantityRaw =
+			item.qty ??
+			item.quantity ??
+			item.ticket_count ??
+			item.total_tickets ??
+			item.totalTickets ??
+			(item.tickets && Array.isArray(item.tickets) ? item.tickets.length : null)
+
+		const amount = toPositiveNumber(amountRaw)
+		const quantity = Math.max(1, Math.floor(toPositiveNumber(quantityRaw) || 1))
+
 		return {
 			activity: "Pembelian Ticket",
 			event: eventName,
 			time: createdAt ? formatRelativeTime(createdAt) : "Baru saja",
 			price: formatPrice(amount),
+			quantity,
+			amount,
 		}
 	})
 }

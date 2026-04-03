@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { FaRegCalendar } from "react-icons/fa6"
 import { HiMapPin } from "react-icons/hi2"
 import { LuClock3 } from "react-icons/lu"
@@ -16,7 +17,7 @@ import { getAuthTokenCookie } from "@/lib/authCookie"
 import { readPaymentContext } from "../../order/paymentResultStorage"
 
 const SIDEBAR_ITEMS = [
-	{ label: "Profil Saya", href: "#" },
+	{ label: "Profil Saya", href: "/dashboard/mainMenu/myProfile" },
 	{ label: "Ticket Saya", href: "/dashboard/mainMenu" },
 	{ label: "Riwayat Transaksi", href: "/dashboard/history", active: true },
 ]
@@ -153,11 +154,14 @@ const createFallbackHistory = (): HistoryRecord | null => {
 }
 
 const History = () => {
+	const router = useRouter()
 	const [records, setRecords] = useState<HistoryRecord[]>([])
 	const [fallbackRecord, setFallbackRecord] = useState<HistoryRecord | null>(null)
 	const [activeFilter, setActiveFilter] = useState<FilterKey>("all")
 	const [isLoading, setIsLoading] = useState(true)
 	const [errorMessage, setErrorMessage] = useState<string | null>(null)
+	const [detailError, setDetailError] = useState<string | null>(null)
+	const [openingDetailId, setOpeningDetailId] = useState<string | null>(null)
 
 	useEffect(() => {
 		setFallbackRecord(createFallbackHistory())
@@ -234,6 +238,101 @@ const History = () => {
 		return filteredRecords.reduce((sum, item) => sum + (item.totalAmount || 0), 0)
 	}, [filteredRecords])
 
+	const resolveEventTargetFromTicketDetail = (payload: unknown) => {
+		if (typeof payload !== "object" || payload === null) {
+			return null
+		}
+
+		const data = payload as Record<string, unknown>
+		const nested = typeof data.data === "object" && data.data !== null ? (data.data as Record<string, unknown>) : null
+		const eventFromData = typeof data.event === "object" && data.event !== null ? (data.event as Record<string, unknown>) : null
+		const eventFromNested = nested && typeof nested.event === "object" && nested.event !== null ? (nested.event as Record<string, unknown>) : null
+
+		const candidates = [data, nested, eventFromData, eventFromNested]
+
+		for (const item of candidates) {
+			if (!item) {
+				continue
+			}
+
+			const slugCandidate = item.slug
+			if (typeof slugCandidate === "string" && slugCandidate.trim()) {
+				return { type: "slug" as const, value: slugCandidate.trim() }
+			}
+
+			const idCandidate = item.event_id ?? item.id
+			if ((typeof idCandidate === "string" || typeof idCandidate === "number") && String(idCandidate).trim()) {
+				return { type: "id" as const, value: String(idCandidate).trim() }
+			}
+		}
+
+		return null
+	}
+
+	const handleOpenDetail = async (item: HistoryRecord) => {
+		setDetailError(null)
+
+		const token = getAuthTokenCookie()
+		if (!token) {
+			setDetailError("Sesi login tidak ditemukan. Silakan login kembali.")
+			return
+		}
+
+		const ticketId = item.id?.trim()
+		if (!ticketId || ticketId.startsWith("local-")) {
+			setDetailError("Detail acara belum tersedia untuk transaksi lokal. Tunggu hingga data tersinkron dari server.")
+			return
+		}
+
+		setOpeningDetailId(ticketId)
+
+		try {
+			const response = await fetch(`/api/me/tickets/${encodeURIComponent(ticketId)}`, {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			})
+
+			if (!response.ok) {
+				const raw = await response.text()
+				let message = "Gagal memuat detail acara."
+
+				try {
+					const parsed = JSON.parse(raw) as { message?: unknown }
+					if (typeof parsed.message === "string" && parsed.message.trim()) {
+						message = parsed.message
+					}
+				} catch {
+					if (raw.trim()) {
+						message = raw
+					}
+				}
+
+				throw new Error(message)
+			}
+
+			const json = (await response.json()) as unknown
+			const target = resolveEventTargetFromTicketDetail(json)
+
+			if (!target) {
+				router.push("/EventDetail")
+				return
+			}
+
+			if (target.type === "slug") {
+				router.push(`/EventDetail?slug=${encodeURIComponent(target.value)}`)
+				return
+			}
+
+			router.push(`/EventDetail?eventId=${encodeURIComponent(target.value)}`)
+		} catch (error) {
+			setDetailError(getApiErrorMessage(error, "Gagal membuka detail acara."))
+		} finally {
+			setOpeningDetailId(null)
+		}
+	}
+
 	return (
 		<main className="min-h-screen bg-[#f6f1e9] pt-20 text-[#2f2416]">
 			<section className="mx-auto w-[92%] max-w-338 pb-16">
@@ -261,11 +360,14 @@ const History = () => {
 					</aside>
 
 					<section>
-						<h1 className="text-5xl font-semibold leading-tight text-[#3f2f1a]">Riwayat Transaksi</h1>
+						<h1 className="wrap-break-word text-4xl font-semibold leading-tight text-[#3f2f1a] sm:text-5xl">Riwayat Transaksi</h1>
+						{detailError ? (
+							<p className="mt-3 rounded-xl border border-[#d59f8f] bg-[#fff2ef] px-4 py-3 text-sm text-[#8d2f2f]">{detailError}</p>
+						) : null}
 
 						<div className="mt-8 grid gap-3 md:grid-cols-[1fr_180px]">
-							<div className="rounded-xl border border-[#9f7a3f]/70 bg-[#f8f3eb] p-3">
-								<div className="flex flex-wrap gap-2">
+							<div className="mobile-stack-scroll rounded-xl border border-[#9f7a3f]/70 bg-[#f8f3eb] p-3">
+								<div className="flex min-w-max flex-nowrap gap-2 md:min-w-0 md:flex-wrap">
 									{FILTERS.map((filter) => (
 										<button
 											key={filter.key}
@@ -334,7 +436,7 @@ const History = () => {
 													</span>
 													<span className="text-[11px] text-[#6f5c40]">INV/{item.orderId}</span>
 												</div>
-												<h3 className="text-2xl font-semibold leading-tight text-[#1f1408]">{item.eventTitle}</h3>
+												<h3 className="text-xl font-semibold leading-tight text-[#1f1408] sm:text-2xl">{item.eventTitle}</h3>
 												<div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-[#3f3120]">
 													<p className="inline-flex items-center gap-2">
 														<FaRegCalendar className="h-4 w-4" />
@@ -354,19 +456,21 @@ const History = () => {
 
 										<div className="text-left lg:text-right">
 											<p className="text-xs text-[#6f5c40]">Total Pembayaran</p>
-											<p className="mt-1 text-3xl font-semibold text-[#1f1408]">{formatCurrency(item.totalAmount)}</p>
+											<p className="mt-1 text-2xl font-semibold text-[#1f1408] sm:text-3xl">{formatCurrency(item.totalAmount)}</p>
 										</div>
 
-										<div className="flex items-center gap-2">
-											<Link
-												href="/EventHighlight"
-												className="inline-flex h-10 min-w-24 items-center justify-center rounded-full bg-[#a7864f] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#8f6f3e]"
+										<div className="flex w-full items-center gap-2 sm:w-auto">
+											<button
+												type="button"
+												onClick={() => handleOpenDetail(item)}
+												disabled={openingDetailId === item.id}
+												className="inline-flex h-10 flex-1 items-center justify-center rounded-full bg-[#a7864f] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#8f6f3e] disabled:cursor-not-allowed disabled:opacity-70 sm:min-w-24 sm:flex-none"
 											>
-												Detail
-											</Link>
+												{openingDetailId === item.id ? "Buka..." : "Detail"}
+											</button>
 											<a
 												href={`/api/ticket/pdf?order_id=${encodeURIComponent(item.orderId)}`}
-												className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#b9965a] text-white transition-colors hover:bg-[#a7864f]"
+												className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#b9965a] text-white transition-colors hover:bg-[#a7864f]"
 												aria-label="Download tiket"
 											>
 												<Ticket className="h-4 w-4" />

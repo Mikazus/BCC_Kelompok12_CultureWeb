@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import EventSettingsCard from "./components/eventSettingsCard";
 import PromotorSidebar from "../components/promotorSidebar";
 import PromotorTopbar from "../components/promotorTopbar";
@@ -8,6 +9,7 @@ import usePromotorAuth from "../hooks/usePromotorAuth";
 import TicketSettingsCard from "./components/ticketSettingsCard";
 import { createEvent, getCategories, type EventCategoryOption } from "@/Services/eventService";
 import { getApiErrorMessage } from "@/lib/apiError";
+import { savePromotorEventPaymentContext } from "./payment/paymentStorage";
 
 type EventFormState = {
 	categoryId: string;
@@ -75,6 +77,7 @@ const toIsoFromDateTimeLocal = (value: string) => {
 };
 
 export default function PromotorEventPage() {
+	const router = useRouter();
 	const { isAuthResolved, token, profileName, profileRoleLabel } = usePromotorAuth();
 	const [formState, setFormState] = useState<EventFormState>(INITIAL_FORM_STATE);
 	const [categories, setCategories] = useState<EventCategoryOption[]>([]);
@@ -207,6 +210,32 @@ export default function PromotorEventPage() {
 				banner: formState.bannerFile,
 			});
 
+			if (response.paymentUrl) {
+				savePromotorEventPaymentContext({
+					eventId: response.eventId || undefined,
+					eventTitle: formState.title.trim() || "Event Baru",
+					paymentUrl: response.paymentUrl,
+					paymentToken: response.paymentToken || undefined,
+					createdAt: new Date().toISOString(),
+				});
+
+				const params = new URLSearchParams({
+					eventTitle: formState.title.trim() || "Event Baru",
+					paymentUrl: response.paymentUrl,
+				});
+
+				if (response.eventId) {
+					params.set("eventId", response.eventId);
+				}
+
+				if (response.paymentToken) {
+					params.set("paymentToken", response.paymentToken);
+				}
+
+				router.push(`/promotor/event/payment?${params.toString()}`);
+				return;
+			}
+
 			setSuccessMessage(
 				typeof response.message === "string" && response.message.trim()
 					? response.message
@@ -226,7 +255,7 @@ export default function PromotorEventPage() {
 
 	return (
 		<div className="min-h-screen bg-[#A88648] text-[#433424]">
-			<div className="mx-auto flex min-h-screen w-full max-w-360 flex-col lg:flex-row">
+			<div className="flex min-h-screen w-full flex-col lg:flex-row">
 				<PromotorSidebar active="event" />
 
 				<div className="flex min-h-screen flex-1 flex-col bg-[#F4F1EC]">

@@ -12,7 +12,7 @@ import type { EventCard, SortOrder } from "./types"
 import type { EventCategoryOption } from "@/Services/eventService"
 import type { ApidogModel } from "@/types/api/event"
 
-const EventDetailPage = () => {
+const EventHighlightPage = () => {
 	const [events, setEvents] = useState<EventCard[]>([])
 	const [isLoading, setIsLoading] = useState(true)
 	const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -119,4 +119,4 @@ const EventDetailPage = () => {
 	)
 }
 
-export default EventDetailPage
+export default EventHighlightPage

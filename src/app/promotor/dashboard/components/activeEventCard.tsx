@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { CalendarDays, Clock3, MapPin, Trash2 } from "lucide-react";
 import type { EventCard } from "@/app/EventHighlight/types";
 import heroImg from "@/image/dash.png";
@@ -6,13 +7,33 @@ import heroImg from "@/image/dash.png";
 type ActiveEventCardProps = {
 	event?: EventCard | null;
 	isLoading?: boolean;
+	isDeleting?: boolean;
+	onDeleteEvent?: (eventId: string) => Promise<void>;
 };
 
-export default function ActiveEventCard({ event, isLoading = false }: ActiveEventCardProps) {
+export default function ActiveEventCard({
+	event,
+	isLoading = false,
+	isDeleting = false,
+	onDeleteEvent,
+}: ActiveEventCardProps) {
+	const handleDelete = async () => {
+		if (!event || !onDeleteEvent) {
+			return;
+		}
+
+		const shouldDelete = window.confirm(`Hapus event ${event.title}? Tindakan ini tidak dapat dibatalkan.`);
+		if (!shouldDelete) {
+			return;
+		}
+
+		await onDeleteEvent(String(event.id));
+	};
+
 	if (isLoading) {
 		return (
 			<div>
-				<h3 className="mb-3 text-[40px] font-semibold text-[#211A13]">Event Aktif</h3>
+				<h3 className="mb-3 text-[36px] font-semibold text-[#211A13]">Event Aktif</h3>
 				<article className="rounded-2xl border border-[#6D522D] bg-[#F8F6F1] p-6 text-[#493728]">
 					<p className="text-lg">Memuat event aktif...</p>
 				</article>
@@ -23,7 +44,7 @@ export default function ActiveEventCard({ event, isLoading = false }: ActiveEven
 	if (!event) {
 		return (
 			<div>
-				<h3 className="mb-3 text-[40px] font-semibold text-[#211A13]">Event Aktif</h3>
+				<h3 className="mb-3 text-[36px] font-semibold text-[#211A13]">Event Aktif</h3>
 				<article className="rounded-2xl border border-[#6D522D] bg-[#F8F6F1] p-6 text-[#493728]">
 					<p className="text-lg">Belum ada event aktif.</p>
 				</article>
@@ -33,7 +54,7 @@ export default function ActiveEventCard({ event, isLoading = false }: ActiveEven
 
 	return (
 		<div>
-			<h3 className="mb-3 text-[40px] font-semibold text-[#211A13]">Event Aktif</h3>
+			<h3 className="mb-3 text-[36px] font-semibold text-[#211A13]">Event Aktif</h3>
 			<article className="overflow-hidden rounded-2xl border border-[#6D522D] bg-[#F8F6F1]">
 				<div className="relative">
 					<Image
@@ -52,7 +73,7 @@ export default function ActiveEventCard({ event, isLoading = false }: ActiveEven
 				</div>
 
 				<div className="p-4 text-[#493728]">
-					<h4 className="text-[34px] font-semibold leading-tight">{event.title}</h4>
+					<h4 className="text-[30px] font-semibold leading-tight">{event.title}</h4>
 					<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#3F3124]">
 						<span className="flex items-center gap-1">
 							<MapPin size={14} /> {event.location || "Lokasi belum tersedia"}
@@ -66,18 +87,20 @@ export default function ActiveEventCard({ event, isLoading = false }: ActiveEven
 					</p>
 
 					<div className="mt-4 flex gap-2">
-						<button
-							type="button"
-							className="flex-1 rounded-full bg-[#A88648] px-4 py-2 text-sm font-medium text-[#FFF8EA] transition hover:bg-[#94743C]"
+						<Link
+							href={`/promotor/event/edit?eventId=${encodeURIComponent(String(event.id))}`}
+							className="flex-1 rounded-full bg-[#A88648] px-4 py-2 text-center text-sm font-medium text-[#FFF8EA] transition hover:bg-[#94743C]"
 						>
 							Edit
-						</button>
+						</Link>
 						<button
 							type="button"
+							onClick={handleDelete}
+							disabled={isDeleting}
 							className="rounded-full bg-[#A88648] px-5 py-2 text-[#FFF8EA] transition hover:bg-[#94743C]"
 							aria-label="delete event"
 						>
-							<Trash2 size={16} />
+							{isDeleting ? "..." : <Trash2 size={16} />}
 						</button>
 					</div>
 				</div>

@@ -1,21 +1,88 @@
 "use client";
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { getMe, loginUser } from '@/Services/authService'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { setAuthTokenCookie } from '@/lib/authCookie'
 import dignImage from '@/image/sign.png'
 
+const OAUTH_TOKEN_KEYS = ['token', 'access_token', 'accessToken', 'jwt']
+
+const extractOAuthToken = (params: URLSearchParams) => {
+	for (const key of OAUTH_TOKEN_KEYS) {
+		const token = params.get(key)?.trim()
+		if (token) {
+			return token
+		}
+	}
+
+	return null
+}
+
 export default function Login() {
 	const router = useRouter()
+	const searchParams = useSearchParams()
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
 	const [rememberMe, setRememberMe] = useState(false)
 	const [isSubmitting, setIsSubmitting] = useState(false)
+	const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false)
 	const [errorMessage, setErrorMessage] = useState<string | null>(null)
+	const oauthToken = useMemo(() => extractOAuthToken(searchParams), [searchParams])
+
+	useEffect(() => {
+		if (!oauthToken) {
+			return
+		}
+
+		let isMounted = true
+
+		const completeGoogleLogin = async () => {
+			setIsGoogleSubmitting(true)
+			setErrorMessage(null)
+
+			try {
+				const me = await getMe(oauthToken)
+
+				if (!isMounted) {
+					return
+				}
+
+				setAuthTokenCookie(oauthToken, true)
+				window.dispatchEvent(new Event('auth-changed'))
+
+				const sanitizedUrl = new URL(window.location.href)
+				OAUTH_TOKEN_KEYS.forEach((key) => {
+					sanitizedUrl.searchParams.delete(key)
+				})
+				sanitizedUrl.searchParams.delete('code')
+				sanitizedUrl.searchParams.delete('state')
+				sanitizedUrl.searchParams.delete('provider')
+				sanitizedUrl.searchParams.delete('oauth')
+				window.history.replaceState(null, '', `${sanitizedUrl.pathname}${sanitizedUrl.search}`)
+
+				const redirectPath = me.role === 'promotor' ? '/promotor/dashboard' : '/dashboard'
+				router.replace(redirectPath)
+			} catch (error) {
+				if (isMounted) {
+					setErrorMessage(getApiErrorMessage(error, 'Login Google gagal. Silakan coba lagi.'))
+				}
+			} finally {
+				if (isMounted) {
+					setIsGoogleSubmitting(false)
+				}
+			}
+		}
+
+		void completeGoogleLogin()
+
+		return () => {
+			isMounted = false
+		}
+	}, [oauthToken, router])
 
 	const handleGoogleLogin = () => {
 		const resolvedBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || 'https://event-budaya.iccn.or.id/api'
@@ -100,7 +167,7 @@ export default function Login() {
 
 						<button
 							type="submit"
-							disabled={isSubmitting}
+							disabled={isSubmitting || isGoogleSubmitting}
 							className="h-12 w-full rounded-full bg-[#9f7f47] text-base font-medium text-white transition-colors hover:bg-[#876834]"
 						>
 							{isSubmitting ? 'Memproses...' : 'Masuk'}
@@ -115,10 +182,11 @@ export default function Login() {
 						<button
 							type="button"
 							onClick={handleGoogleLogin}
+							disabled={isGoogleSubmitting || isSubmitting}
 							className="mx-auto flex h-12 min-w-44 items-center justify-center gap-2 rounded-xl bg-[#9f7f47] px-6 text-sm font-medium text-white transition-colors hover:bg-[#876834]"
 						>
 							<span className="text-lg leading-none">G</span>
-							Google
+							{isGoogleSubmitting ? 'Memproses Google...' : 'Google'}
 						</button>
 
 						<p className="text-center text-base text-[#8f8a84]">
